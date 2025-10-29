@@ -60,29 +60,6 @@ The project utilizes Tokio for async operations.
 The daemon creates/appends stdout to ./daemon.out and stderr to ./daemon.err files.
 The apps generate their own out and err files in their specific folders.
 
-## The project structure is:
-.
-├── app1
-│   └── date.sh
-├── app3
-│   └── echo.sh
-├── Cargo.lock
-├── Cargo.toml
-├── cli
-│   ├── Cargo.lock
-│   ├── Cargo.toml
-│   ├── README.md
-│   └── src
-│       └── main.rs
-├── config.json
-├── Dockerfile
-├── README.md
-└── src
-    ├── application.rs
-    ├── ipc.rs
-    ├── main.rs
-    └── utils.rs
-
 ## Docker
 The code has a Dockerfile that packages the application to be run in a Docker. The image can be built using the following command:
 ```
