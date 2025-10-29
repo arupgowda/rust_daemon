@@ -1,0 +1,30 @@
+[
+    {
+        "name": "test1",
+        "auto_start": true,
+        "user": "root",
+        "working_dir": "~/rust_daemon/app1",
+        "command": "~/rust_daemon/app1/date.sh",
+        "stdout_logfile": "~/rust_daemon/app1/app1.out",
+        "stderr_logfile": "~/rust_daemon/app1/app1.err"
+    },
+    {
+        "name": "test2",
+        "auto_start": false,
+        "user": "root",
+        "working_dir": "~/rust_daemon/app2",
+        "command": "~/rust_daemon/app2",
+        "stdout_logfile": "/tmp/app/app2.out",
+        "stderr_logfile": "/tmp/app/app2.err"
+    },
+    {
+        "name": "test3",
+        "auto_start": true,
+        "user": "root",
+        "working_dir": "~/rust_daemon/app3",
+        "command": "~/rust_daemon/app3/echo.sh",
+        "stdout_logfile": "~/rust_daemon/app3/app3.out",
+        "stderr_logfile": "~/rust_daemon/app3/app3.err"
+    }
+]
+
