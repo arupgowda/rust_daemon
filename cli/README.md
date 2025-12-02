@@ -3,19 +3,18 @@ This app controls the ATPCO daemon by sending commands to the running daemon and
 The app uses a TCP socket on the localhost:8081 for IPC with the daemon. 
 
 ## It supports the following commands:
-- start 
-- stop
-- status
-- restart
+- [x] start 
+- [] stop
+- [x] status
+- [] restart
 
 All commands except status takes an additional argument indicating the app name.
-
-NOTE: Only status is implemented and start partially implemented.
 
 ```
 cargo run -- --command <start|stop|status|restart> --app <app_name>
 ```
 
+## Telnet
 The CLI app can be tested locally without the daemon running by using telnet in the following way:
 
 ```
