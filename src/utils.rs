@@ -1,9 +1,17 @@
 use serde::{Serialize};
 use procfs::{process};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::Mutex;
+use std::{
+    sync::Arc,
+    path::Path,
+    collections::HashMap,
+};
+use tokio::{
+    process::Command,
+    fs::{OpenOptions},
+    sync::Mutex,
+};
 use serde_json::{Value, json};
+use shellexpand::tilde;
 
 #[derive(Serialize)]
 struct Status {
@@ -58,14 +66,14 @@ pub async fn get_stats(pids_map: Arc<Mutex<HashMap<String, u32>>>) -> Result<Val
 }
 
 // Start an application
-pub async fn start_app(pids_map: Arc<Mutex<HashMap<String, u32>>>, apps: Arc<Vec<Application>>, app_name: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-
+pub async fn start_app(pids_map: Arc<Mutex<HashMap<String, u32>>>, apps: Arc<Vec<Application>>, app_name: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
+{
     // First check if App is valid
-    let _app = apps.iter()
+    let app = apps.iter()
         .find(|a| a.name == app_name)
         .ok_or("Application not found")?;
 
-    // Check is app is already running
+    // Check if app is already running
     let is_running = {
         let map = pids_map.lock().await;
         map.contains_key(&app_name)
@@ -74,6 +82,56 @@ pub async fn start_app(pids_map: Arc<Mutex<HashMap<String, u32>>>, apps: Arc<Vec
     if is_running {
         return Ok("Application is already running".to_string());
     }
+    else {
+        println!("Starting app - {}", app_name);
 
-    Ok("Application started successfully".to_string())
+        let stdout_path = tilde(&app.stdout_logfile).into_owned();
+        let stdout = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(Path::new(&stdout_path))
+            .await
+            .unwrap_or_else(|e| panic!("Failed to open stdout: {}", e));
+
+        let stderr_path = tilde(&app.stderr_logfile).into_owned();
+        let stderr = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(Path::new(&stderr_path))
+            .await
+            .unwrap_or_else(|e| panic!("Failed to open stderr: {}", e));
+
+        let command_path = tilde(&app.command).into_owned();
+        let working_dir_path = tilde(&app.working_dir).into_owned();
+        match Command::new(Path::new(&command_path))
+            .current_dir(Path::new(&working_dir_path))
+            .stdout(stdout.into_std().await)
+            .stderr(stderr.into_std().await)
+            .kill_on_drop(true)
+            .spawn() // this starts the application immediately
+            {
+                Ok(mut child) => {
+                    let child_id = child.id().unwrap_or(0);
+                    println!("Application {} started with pid {}", app.name, child_id);
+                    let mut map = pids_map.lock().await;
+                    map.insert(app.name.clone(), child.id().unwrap());
+
+                    let app_name_clone = app.name.clone();
+                    let pids_map_clone = Arc::clone(&pids_map);
+
+                    // Move child into tokio task to monitor
+                    tokio::spawn(async move {
+                        // Monitor process for termination
+                        child.wait().await.ok();
+                        let mut map = pids_map_clone.lock().await;
+                        map.remove(&app_name_clone);
+                    });
+
+                    return Ok(format!("Application {} started with pid {}", app.name, child_id));
+                },
+                Err(e) => {
+                    return Err(format!("Application failed to start successfully with error {}", e).into()); 
+                }
+            };
+    }
 }

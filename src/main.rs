@@ -1,14 +1,18 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::fs::{File};
 use daemonize::Daemonize; 
-use std::{time::Duration};
+use std::{
+    time::Duration,
+    path::Path,
+};
+use tracing;
+use shellexpand::tilde;
 use tokio::{
     process::Command,
     fs::{OpenOptions},
+    sync::Mutex,
 };
-use tracing;
 
 mod ipc;
 mod utils;
@@ -19,8 +23,7 @@ use application::Application;
 
 fn load_config() -> Result<Vec<Application>, Box<dyn std::error::Error>> {
     let home = std::env::var("HOME").unwrap();
-    let config_file_path = format!("{}/rust_daemon/config.json", home);
-    //let config_file_path = "/rust_daemon/config.json";
+    let config_file_path = format!("{}/src/rust_daemon/config.json", home);
     let file = File::open(config_file_path)?;
     let apps:Vec<Application> = serde_json::from_reader(file).expect("JSON improperly formatted");
     //println!("{:?}",apps);
@@ -31,25 +34,33 @@ async fn run_async_processes(apps: Arc<Vec<Application>>, pids_map: Arc<Mutex<Ha
     for app in apps.iter().filter(|a| a.auto_start) {
         let app_clone = app.clone();
         let pids_map = Arc::clone(&pids_map);
+
         tokio::spawn(async move {
             loop { 
-                println!("Starting app - {} ", app_clone.name);
+                println!("Starting app - {}", app_clone.name);
+
+                // Expands ~ in config file and returns an expanded owned string
+                let stdout_path = tilde(&app_clone.stdout_logfile).into_owned();
                 let stdout = OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open(&app_clone.stdout_logfile)
+                        .open(Path::new(&stdout_path)) // Path::new turns a string into a
+                                                       // FileSystem type
                         .await
                         .unwrap_or_else(|e| panic!("Failed to open stdout: {}", e));
 
+                let stderr_path = tilde(&app_clone.stderr_logfile).into_owned();
                 let stderr = OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open(&app_clone.stderr_logfile)
+                        .open(Path::new(&stderr_path))
                         .await
                         .unwrap_or_else(|e| panic!("Failed to open stderr: {}", e));
 
-                let mut cmd = match Command::new(&app_clone.command)
-                        .current_dir(&app_clone.working_dir)
+                let command_path = tilde(&app_clone.command).into_owned();
+                let working_dir_path = tilde(&app_clone.working_dir).into_owned();
+                let mut cmd = match Command::new(Path::new(&command_path))
+                        .current_dir(Path::new(&working_dir_path))
                         .stdout(stdout.into_std().await)
                         .stderr(stderr.into_std().await)
                         .kill_on_drop(true)
@@ -72,16 +83,17 @@ async fn run_async_processes(apps: Arc<Vec<Application>>, pids_map: Arc<Mutex<Ha
                     }
                 };
 
-                // Monitor process
-                let _result = cmd.wait().await;
-                let mut map = pids_map.lock().await;
-                map.remove(&app_clone.name);
+                // Monitor process for termination
                 if let Err(e) = cmd.wait().await {
                     tracing::error!("Process failed: {}", e);
                 }
 
+                // Remove PID from hash map
+                let mut map = pids_map.lock().await;
+                map.remove(&app_clone.name);
+
                 // Wait before restarting
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
             }
         });
     }
@@ -95,7 +107,7 @@ async fn async_main(apps: Vec<Application>) -> Result<(), Box<dyn std::error::Er
     run_async_processes(Arc::clone(&apps_arc), Arc::clone(&pids_map)).await?;
 
     // Spawn socket listener in background
-    tokio::spawn(async {
+    tokio::spawn(async move {
         if let Err(e) = listen_socket(pids_map, apps_arc).await {
             eprintln!("Socket listener failed: {}", e);
         }
@@ -125,14 +137,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let home = std::env::var("HOME").unwrap();
-    let working_dir = format!("{}/rust_daemon/", home);
-    let stdout_path = format!("{}/rust_daemon/daemon.out", home);
-    let stderr_path = format!("{}/rust_daemon/daemon.err", home);
+    let working_dir = format!("{}/src/rust_daemon/", home);
+    let stdout_path = format!("{}/src/rust_daemon/daemon.out", home);
+    let stderr_path = format!("{}/src/rust_daemon/daemon.err", home);
 
-    //let working_dir = "/rust_daemon/";
-    //let stdout_path = "/rust_daemon/daemon.out";
-    //let stderr_path = "/rust_daemon/daemon.err";
-    
     let stdout = std::fs::File::create(&stdout_path).unwrap();
     let stderr = std::fs::File::create(&stderr_path)?;
 

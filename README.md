@@ -36,11 +36,11 @@ The daemon also supports a way for the CLI CTL app described bellow to connect a
 It does this by utilizing sockets for Inter Process Communication. The daemon opens a listening socket on localhost 
 waiting to service CLI requets.
 
-- The cli app will act as a remote control for the daemon. It connect's' to it and fetch stats or execute operations
+- The cli app will act as a remote control for the daemon. It connect's' to it and fetch's' stats or execute operations
 
 - It support's the following operations:
 
-   - status - Display the status of all the applications defined in the config file example output.:
+   - [x] status - Display the status of all the applications defined in the config file example output.:
 
      app1: running_time: 10hrs, running:true.....
 
@@ -48,11 +48,11 @@ waiting to service CLI requets.
 
      app3: running_time: 1hr, running:true
 
-   - stop params:app_name - Will try to stop a running application gracefully and if can't will do it forcefully the app will not get auto started anymore even if autostart=true in this case.
+   - [] stop params:app_name - Will try to stop a running application gracefully and if can't will do it forcefully the app will not get auto started anymore even if autostart=true in this case.
 
-   - start params:app_name - Will try to start an application that is not running. It should try endlessly until it succeeds.
+   - [x] start params:app_name - Will try to start an application that is not running. It should try endlessly until it succeeds.
 
-   - restart params:app_name - Will first try to execute a stop and then start.
+   - [] restart params:app_name - Will first try to execute a stop and then start.
 
 The project utilizes Tokio for async operations.
 
